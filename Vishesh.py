@@ -1,6 +1,5 @@
 # pip install streamlit fbprophet yfinance plotly
-import warnings
-warnings.simplefilter(action='ignore', category=FutureWarning)
+
 import streamlit as st
 from datetime import date
 import yfinance as yf
