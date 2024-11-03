@@ -1,4 +1,4 @@
-# pip install streamlit fbprophet yfinance plotly
+# pip install streamlit ,fbprophet, yfinance plotly
 import warnings
 warnings.simplefilter(action='ignore', category=FutureWarning)
 import streamlit as st
