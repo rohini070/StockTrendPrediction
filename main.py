@@ -4,7 +4,8 @@ warnings.simplefilter(action='ignore', category=FutureWarning)
 import streamlit as st
 from datetime import date
 import yfinance as yf
-import prophet
+from neuralprophet import NeuralProphet
+
 from prophet.plot import plot_plotly
 from plotly import graph_objs as go
 import numpy as np  # Added this import
