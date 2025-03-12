@@ -5,34 +5,26 @@ import streamlit as st
 from datetime import date
 import yfinance as yf
 from neuralprophet import NeuralProphet
-
-from fbprophet.plot import plot_plotly
 from plotly import graph_objs as go
-import numpy as np
+import pandas as pd
 
-# App Title
 st.title('Stock Forecast App')
 
-# Date Range
 START = "2015-01-01"
 TODAY = date.today().strftime("%Y-%m-%d")
 
-# Select Stock
 stocks = ('GOOG', 'AAPL', 'MSFT', 'GME')
 selected_stock = st.selectbox('Select dataset for prediction', stocks)
 
-# Prediction Period
 n_years = st.slider('Years of prediction:', 1, 4)
 period = n_years * 365
 
-# Load Data Function
 @st.cache_data
 def load_data(ticker):
     data = yf.download(ticker, START, TODAY)
     data.reset_index(inplace=True)
     return data
 
-# Load and Display Data
 data_load_state = st.text('Loading data...')
 data = load_data(selected_stock)
 data_load_state.text('Loading data... done!')
@@ -40,7 +32,6 @@ data_load_state.text('Loading data... done!')
 st.subheader('Raw Data')
 st.write(data.tail())
 
-# Plot Raw Data
 def plot_raw_data():
     fig = go.Figure()
     fig.add_trace(go.Scatter(x=data['Date'], y=data['Open'], name="Stock Open"))
@@ -50,27 +41,23 @@ def plot_raw_data():
 
 plot_raw_data()
 
-# Prepare Data for Forecasting
 df_train = data[['Date', 'Close']]
 df_train = df_train.rename(columns={"Date": "ds", "Close": "y"})
+df_train['y'] = pd.to_numeric(df_train['y'], errors='coerce')
+df_train.dropna(inplace=True)
 
-# Train the Model
-m = Prophet()
-m.fit(df_train)
+m = NeuralProphet()
+m.fit(df_train, freq='D')
 
-# Make Predictions
-future = m.make_future_dataframe(periods=period)
+future = m.make_future_dataframe(df_train, periods=period)
 forecast = m.predict(future)
 
-# Display Forecast Data
 st.subheader('Forecast Data')
 st.write(forecast.tail())
 
-# Forecast Plots
 st.write(f'Forecast plot for {n_years} years')
-fig1 = plot_plotly(m, forecast)
-st.plotly_chart(fig1)
-
-st.write("Forecast Components")
-fig2 = m.plot_components(forecast)
-st.write(fig2)
+fig1 = go.Figure()
+fig1.add_trace(go.Scatter(x=forecast['ds'], y=forecast['yhat1'], name="Forecast"))
+fig1.add_trace(go.Scatter(x=df_train['ds'], y=df_train['y'], name="Actual"))
+fig1.layout.update(title_text='Forecast vs Actual', xaxis_rangeslider_visible=True)
+st.plotly_chart(fig1)"
