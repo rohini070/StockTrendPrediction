@@ -1,70 +1,51 @@
 import streamlit as st
 import pandas as pd
-import yfinance as yf
 from prophet import Prophet
-import matplotlib.pyplot as plt
 
-st.title("Stock Trend Prediction")
+# Streamlit UI
+st.title("Stock Trend Prediction using Prophet")
 
-# User input for stock ticker
-ticker = st.text_input("Enter stock ticker (e.g., AAPL, TSLA):", "AAPL")
+# Upload CSV file
+uploaded_file = st.file_uploader("Upload your CSV file", type=["csv"])
 
-# Download stock data
-def load_data(ticker):
-    try:
-        df = yf.download(ticker)
-        if df.empty:
-            st.error("No data found for the given ticker. Please check the ticker symbol.")
-            st.stop()
-        return df
-    except Exception as e:
-        st.error(f"Error loading data: {e}")
+if uploaded_file is not None:
+    # Read CSV
+    df = pd.read_csv(uploaded_file)
+    st.write("Original Data Preview:")
+    st.write(df.head())
+
+    # Ensure required columns are present
+    if 'ds' not in df.columns or 'y' not in df.columns:
+        st.error("Error: CSV must contain 'ds' (date) and 'y' (target) columns.")
         st.stop()
 
-df = load_data(ticker)
+    # Ensure 'ds' is datetime and 'y' is numeric
+    df['ds'] = pd.to_datetime(df['ds'], errors='coerce')
+    df['y'] = pd.to_numeric(df['y'], errors='coerce')
 
-st.write("### Raw Data")
-st.write(df.tail())
+    # Drop invalid rows
+    df.dropna(subset=['ds', 'y'], inplace=True)
 
-# Prepare data for Prophet
-if 'Date' not in df.columns:
-    df.reset_index(inplace=True)
+    # Validate data after conversion
+    if df.empty:
+        st.error("Error: DataFrame is empty after cleaning. Check your data!")
+        st.stop()
 
-# Ensure proper columns and drop missing values
-df = df[['Date', 'Close']].rename(columns={'Date': 'ds', 'Close': 'y'}).dropna()
+    st.write("Cleaned Data Preview:")
+    st.write(df.head())
 
-# Ensure 'y' is numeric
-df['y'] = pd.to_numeric(df['y'], errors='coerce')
+    # Fit the Prophet model
+    m = Prophet()
+    m.fit(df)
 
-# Drop rows where 'y' is NaN
-df.dropna(subset=['y'], inplace=True)
+    # Forecast future dates
+    future = m.make_future_dataframe(periods=365)
+    forecast = m.predict(future)
 
-if df.shape[0] < 2:
-    st.error("Insufficient data for prediction. At least 2 rows are required.")
-    st.stop()
+    # Display Forecast
+    st.write("Forecasted Data:")
+    st.write(forecast.tail())
 
-# Split data into train and test
-train_size = int(len(df) * 0.8)
-df_train = df[:train_size]
-df_test = df[train_size:]
-
-# Train Prophet model
-m = Prophet()
-m.fit(df_train)
-
-# Create future dataframe
-future = m.make_future_dataframe(periods=len(df_test))
-
-# Predict
-forecast = m.predict(future)
-
-# Display forecast
-st.write("### Forecast Data")
-st.write(forecast.tail())
-
-# Plot results
-fig, ax = plt.subplots()
-m.plot(forecast, ax=ax)
-ax.scatter(df_test['ds'], df_test['y'], color='red', label='Actual Values')
-ax.legend()
-st.pyplot(fig)
+    # Plot Forecast
+    fig = m.plot(forecast)
+    st.pyplot(fig)
