@@ -21,6 +21,8 @@ if uploaded_file is not None:
 
     # Ensure 'ds' is datetime and 'y' is numeric
     df['ds'] = pd.to_datetime(df['ds'], errors='coerce')
+    df['ds'] = df['ds'].dt.date  # Extract only the date part
+    df['ds'] = pd.to_datetime(df['ds'])  # Convert to datetime after extracting date
     df['y'] = pd.to_numeric(df['y'], errors='coerce')
 
     # Drop invalid rows
@@ -35,9 +37,8 @@ if uploaded_file is not None:
     st.write("Data Types:")
     st.write(df.dtypes)
 
-    # Debugging: Display cleaned data preview
-    st.write("Cleaned Data Preview:")
-    st.write(df.head())
+    # Debugging: Display sample 'ds' values
+    st.write("Sample 'ds' values after conversion:", df['ds'].head())
 
     # Check if 'y' is a numeric Series
     if not isinstance(df['y'], pd.Series) or not pd.api.types.is_numeric_dtype(df['y']):
