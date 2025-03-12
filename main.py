@@ -12,75 +12,105 @@ uploaded_file = st.file_uploader("Upload your CSV file", type=["csv"])
 if uploaded_file is not None:
     try:
         # Read CSV
-        df = pd.read_csv(uploaded_file)
-        st.write("Original Data Preview:")
-        st.write(df.head())
+        df_original = pd.read_csv(uploaded_file)
         
-        # Debugging information
-        st.write("Columns in DataFrame:", df.columns.tolist())
+        st.write("### Original Data Analysis")
+        st.write("First 5 rows:")
+        st.write(df_original.head())
         
-        # Check for the required columns
-        if 'ds' not in df.columns or 'y' not in df.columns:
-            st.error("Error: CSV must contain 'ds' (date) and 'y' (target) columns.")
+        st.write("Column names:", df_original.columns.tolist())
+        st.write("Data types:", df_original.dtypes)
+        
+        # Create completely new dataframe from scratch
+        # This method avoids any hidden attributes or issues with the original dataframe
+        
+        st.write("### Creating Prophet-compatible data")
+        
+        # Check if required columns exist
+        if 'ds' not in df_original.columns:
+            st.error("Column 'ds' not found. Please ensure your CSV has a date column named 'ds'.")
+            st.stop()
+            
+        if 'y' not in df_original.columns:
+            st.error("Column 'y' not found. Please ensure your CSV has a target column named 'y'.")
             st.stop()
         
-        # Create a fresh DataFrame with only needed columns
-        # This is a key fix - create a brand new DataFrame rather than modifying the existing one
-        new_df = pd.DataFrame()
-        new_df['ds'] = pd.to_datetime(df['ds'])
+        # Extract the columns as pure Python lists
+        dates = df_original['ds'].tolist()
+        values = df_original['y'].tolist()
         
-        # Convert y column explicitly to list then to Series to ensure proper format
-        y_values = df['y'].values.tolist() if isinstance(df['y'], pd.Series) else list(df['y'])
-        new_df['y'] = pd.Series(y_values, dtype=float)
+        st.write("Sample dates:", dates[:5])
+        st.write("Sample values:", values[:5])
         
-        # Display debugging info
-        st.write("New DataFrame structure:")
-        st.write(new_df.head())
-        st.write("Data types:", new_df.dtypes)
+        # Create a fresh dataframe with these lists
+        prophet_df = pd.DataFrame()
         
-        # Check for invalid values
-        st.write("NaN count in new df:", new_df.isna().sum())
-        
-        # Drop any rows with NaN values
-        new_df.dropna(inplace=True)
-        
-        if new_df.empty:
-            st.error("Error: No valid data after cleaning!")
-            st.stop()
-        
-        # Final check before fitting Prophet
-        st.write("Final DataFrame shape:", new_df.shape)
-        
-        # Fit the Prophet model
-        m = Prophet(daily_seasonality=False)  # Adjust parameters as needed
-        m.fit(new_df)
-        
-        # Forecast future dates
-        future = m.make_future_dataframe(periods=365)
-        forecast = m.predict(future)
-        
-        # Display Forecast
-        st.write("Forecasted Data:")
-        st.write(forecast[['ds', 'yhat', 'yhat_lower', 'yhat_upper']].tail())
-        
-        # Plot Forecast
-        fig1 = m.plot(forecast)
-        st.pyplot(fig1)
-        
-        # Add components plot
-        fig2 = m.plot_components(forecast)
-        st.pyplot(fig2)
-        
-    except Exception as e:
-        st.error(f"Error: {str(e)}")
-        st.write("Error details:", str(e))
-       
-        st.write("Let's look at your raw data more closely:")
+        # Convert dates to datetime
         try:
-            raw_df = pd.read_csv(uploaded_file)
-            st.write("Column names:", raw_df.columns.tolist())
-            for col in raw_df.columns:
-                st.write(f"Column '{col}' - First 5 values:", raw_df[col].head().tolist())
-                st.write(f"Column '{col}' - Type:", type(raw_df[col]))
+            prophet_df['ds'] = pd.to_datetime(dates)
+        except Exception as e:
+            st.error(f"Error converting dates: {e}")
+            st.stop()
+            
+        # Convert values to float
+        try:
+            # Try converting each value individually
+            float_values = []
+            for v in values:
+                try:
+                    float_values.append(float(v))
+                except:
+                    float_values.append(np.nan)
+                    
+            prophet_df['y'] = float_values
+        except Exception as e:
+            st.error(f"Error converting values: {e}")
+            st.stop()
+            
+        # Drop NaN values
+        prophet_df.dropna(inplace=True)
+        
+        st.write("### Final Prophet Data")
+        st.write(prophet_df.head())
+        st.write("Shape:", prophet_df.shape)
+        
+        if prophet_df.empty:
+            st.error("No valid data left after processing!")
+            st.stop()
+            
+        # Only proceed if we have data
+        if len(prophet_df) > 0:
+            st.write("### Fitting Prophet Model")
+            
+            # Fit model
+            m = Prophet()
+            m.fit(prophet_df)
+            
+            # Forecast
+            future = m.make_future_dataframe(periods=90)  # Predict 90 days
+            forecast = m.predict(future)
+            
+            # Display results
+            st.write("### Forecast Results")
+            st.write(forecast[['ds', 'yhat', 'yhat_lower', 'yhat_upper']].tail())
+            
+            # Plot
+            fig1 = m.plot(forecast)
+            st.pyplot(fig1)
+            
+            fig2 = m.plot_components(forecast)
+            st.pyplot(fig2)
+            
+    except Exception as e:
+        st.error(f"Unexpected error: {e}")
+        
+        # Add detailed debugging for investigation
+        st.write("### DEBUG: Examining uploaded file")
+        try:
+            # Just read file as plain text
+            uploaded_file.seek(0)
+            content = uploaded_file.read().decode()
+            st.write("First 500 characters of file:")
+            st.write(content[:500])
         except Exception as ex:
-            st.write(f"Error examining raw data: {str(ex)}")
+            st.write(f"Error reading file content: {ex}")
