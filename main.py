@@ -1,75 +1,73 @@
 import streamlit as st
 import pandas as pd
-import numpy as np
-import yfinance as yf
 from prophet import Prophet
 
-st.title("Stock Prediction Debug App")
+# Streamlit UI
+st.title("Stock Trend Prediction using Prophet")
 
-# Let's test with a hardcoded stock (Google)
-try:
-    # Step 1: Get data directly from yfinance
-    st.write("Step 1: Loading stock data...")
-    stock_data = yf.download("GOOG", period="2y")
-    
-    # Display the raw data
-    st.write("Raw data from yfinance:")
-    st.write(stock_data.head())
-    st.write(f"Data shape: {stock_data.shape}")
-    
-    # Step 2: Reset index to make Date a column
-    stock_data.reset_index(inplace=True)
-    
-    st.write("Data after reset_index:")
-    st.write(stock_data.head())
-    
-    # Step 3: Create a completely new and simple dataframe
-    st.write("Step 3: Creating Prophet dataframe...")
-    
-    # Just extract the two columns we need as lists
-    dates = stock_data['Date'].tolist()
-    close_prices = stock_data['Close'].tolist()
-    
-    # Create a new empty dataframe
-    prophet_data = pd.DataFrame()
-    prophet_data['ds'] = dates
-    prophet_data['y'] = close_prices
-    
-    # Display the Prophet dataframe
-    st.write("Prophet input dataframe:")
-    st.write(prophet_data.head())
-    st.write(f"Prophet data shape: {prophet_data.shape}")
-    st.write("Data types:", prophet_data.dtypes)
-    
-    # Step 4: Try to fit the model
-    st.write("Step 4: Fitting Prophet model...")
-    
-    # Create model with very basic settings
-    model = Prophet(daily_seasonality=False, weekly_seasonality=True)
-    
-    # This is where the error usually happens
-    st.write("About to fit model...")
-    model.fit(prophet_data)
-    st.write("✅ Model fitted successfully!")
-    
-    # Step 5: Make prediction if fit was successful
-    st.write("Step 5: Making prediction...")
-    future = model.make_future_dataframe(periods=365)
-    forecast = model.predict(future)
-    
-    # Show prediction results
-    st.write("Forecast result:")
-    st.write(forecast[['ds', 'yhat', 'yhat_lower', 'yhat_upper']].tail())
-    
-    # Plot if everything worked
-    st.write("Forecast plot:")
-    fig1 = model.plot(forecast)
-    st.pyplot(fig1)
-    
-except Exception as e:
-    st.error(f"Error: {str(e)}")
-    st.write("Error location:")
-    
-    # Try to provide more context on the error
-    import traceback
-    st.code(traceback.format_exc())
+# Upload CSV file
+uploaded_file = st.file_uploader("Upload your CSV file", type=["csv"])
+
+if uploaded_file is not None:
+    # Read CSV
+    df = pd.read_csv(uploaded_file)
+    st.write("Original Data Preview:")
+    st.write(df.head())
+
+    # Ensure required columns are present
+    if 'ds' not in df.columns or 'y' not in df.columns:
+        st.error("Error: CSV must contain 'ds' (date) and 'y' (target) columns.")
+        st.stop()
+
+    # Ensure 'ds' is datetime and 'y' is numeric
+    df['ds'] = pd.to_datetime(df['ds'], errors='coerce')
+    df['y'] = pd.to_numeric(df['y'], errors='coerce')
+
+    # Drop invalid rows
+    df.dropna(subset=['ds', 'y'], inplace=True)
+
+    # Debugging: Check if DataFrame is empty after cleaning
+    if df.empty:
+        st.error("Error: DataFrame is empty after cleaning. Check your data!")
+        st.stop()
+
+    # Debugging: Display cleaned data types
+    st.write("Data Types:")
+    st.write(df.dtypes)
+
+    # Debugging: Display cleaned data preview
+    st.write("Cleaned Data Preview:")
+    st.write(df.head())
+
+    # Check if 'y' is a numeric Series
+    if not isinstance(df['y'], pd.Series) or not pd.api.types.is_numeric_dtype(df['y']):
+        st.error("Error: 'y' must be a numeric Series.")
+        st.stop()
+
+    # Fit the Prophet model (ensure df has valid 'ds' and 'y')
+    try:
+        m = Prophet()
+        m.fit(df)
+    except Exception as e:
+        st.error(f"Error while fitting Prophet model: {e}")
+        st.stop()
+
+    # Forecast future dates
+    try:
+        future = m.make_future_dataframe(periods=365)
+        forecast = m.predict(future)
+    except Exception as e:
+        st.error(f"Error while forecasting: {e}")
+        st.stop()
+
+    # Display Forecast
+    st.write("Forecasted Data:")
+    st.write(forecast.tail())
+
+    # Plot Forecast
+    try:
+        fig = m.plot(forecast)
+        st.pyplot(fig)
+    except Exception as e:
+        st.error(f"Error while plotting forecast: {e}")
+        st.stop()
